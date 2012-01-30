@@ -17,7 +17,7 @@ $content = "";
 sub Item7{
   $content =~ s/
     item\s+?7  #item and arbitrary number of spaces.
-    .*        #anything in between
+    .*?        #anything in between
     management.s\s+?discussion\s+?and\s+?analysis\s+?of\s+?financial\s+?condition\s+?and\s+?results\s+?of\s+?operations
     /
     ######ITEM 7######
@@ -27,7 +27,7 @@ sub Item7{
 sub Item7a{
   $content =~ s/
     item\s+?7a
-    .*
+    .*?
     quantitative\s+?and\s+?(qualitative|qualification)\s+?disclosures\s+?about\s+?market\s+?risk
     /
     ######ITEM 7a######
@@ -38,7 +38,7 @@ sub Item89{
   #return true if it's item 8.
   $content =~ s/
     item\s+?8
-    .*
+    .*?
     financial\s+?statements
     /
     ######ITEM 8######
@@ -88,6 +88,8 @@ Item7($content);
 Item7a($content);
 Item89($content);
 
+print $content;
+
 #split lines into array.
 @all = split /\#\#\#\#\#\#/, $content;
 #prepare 2 empty strings for output.
@@ -99,15 +101,24 @@ $exist7a=0;
 #now it's in such a pattern.
 # sth######ITEM7######Content of Item 7######ITEM7a######Content of Item7a
 for($i = 0; $i < scalar(@all); ++$i){
-  if($i =~ m/^ITEM (7|7a|8|9)$/s){
+  if($all[$i] =~ m/^ITEM (7|7a|8|9)$/s){
     #then $all[$i+1] should store the string I want.
-    if($i =~ m/^ITEM 7$/s){
+    if($all[$i] =~ m/^ITEM 7$/s){
       $exist7=1;
-      $output7=$all[++$i];
+      #a do-until block is used here to add consecutive segments together.
+      #In some cases, there might be multiple ITEM7(Continue) in the file which will mess up the file. The loop will add them all together.
+      do{
+        $output7.=$all[++$i];
+      } until($all[$i+1] =~ m/^ITEM 7a$/s
+            or $all[$i+1] =~ m/^ITEM 8$/s
+            or $all[$i+1] =~ m/^ITEM 9$/s);
     }
-    elsif($i =~ m/^ITEM 7a$/s){
+    elsif($all[$i] =~ m/^ITEM 7a$/s){
       $exist7a=1;
-      $output7a=$all[++$i];
+      do{
+        $output7a.=$all[++$i];
+      } until($all[$i+1] =~ m/^ITEM 8$/s
+            or $all[$i+1] =~ m/^ITEM 9$/s);
     }
   }
 }
@@ -120,16 +131,24 @@ open (FILEOUT, "> $fileout");
 print FILEOUT $plainTextInOneLine;
 close FILEOUT;
 if($exist7){
-  print "Generating Item 7 file\n";
+  print "Generating Item 7 file......\n";
   open (ITEM7, "> $item7file");
+  print ITEM7 "ITEM 7. MANAGEMENT’S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS\n\n";
   print ITEM7 $output7;
   close ITEM7;
-  print "Item 7 output to file: $item7file\n";
+  print "Item 7 output to file: $item7file.\n";
+}
+else{
+  print "Item 7 in $filename not found, error!\n";
 }
 if($exist7a){
-  print "Generating Item 7a file\n";
+  print "Generating Item 7a file......\n";
   open (ITEM7A, "> $item7afile");
+  print ITEM7A "ITEM 7A. QUANTITATIVE AND QUALITATIVE DISCLOSURES ABOUT MARKET RISK\n\n";
   print ITEM7A $output7a;
   close ITEM7A;
-  print "Item 7a output to file: $item7afile\n";
+  print "Item 7a output to file: $item7afile.\n";
+}
+else{
+  print "Item 7a in $filename not found.\n";
 }
