@@ -13,7 +13,8 @@ use base "HTML::Parser";
 use HTML::Entities;
 
 $filename=$ARGV[0];
-open (FILE, "< $filename") or die "$filename cannot be open: $!\n";
+open (FILE, "< $filename") 
+  or die "$filename cannot be open: $!\n";
 print "reading from $filename.\n";
 
 $content = "";
@@ -26,12 +27,27 @@ $content = "";
 # Note: ? added after + or * (such as .*? \s+?) are for non-greedy pattern matching.
 sub Item7{
   $content =~ s/
-    [\.|^\"]\s+? # ends with dot or not begin with ". That means it's not quoting, or it's after the end of a sentence. Hence escape from all the quoting rules and refernces.
-    item\s+?7  # item and arbitrary number of spaces.
-    .*?        # anything in between
-    management[^0-9a-z]{0,3}s?\s+?discussions?\s+?and\s+?analysis\s+?of\s+?       # the necessary part
-      (financial\s+?conditions?|results\s+?of\s+?operations?)       # "financial conditions" and "results of operations" may come in different order.
-      (\s+?and\s+?results\s+?of\s+?operations?|\s+?and\s+?financial\s+?conditions?)?       # the latter part may not be necessary, so ? mark is used here.
+    (?<!\")(?<!in\ )(?<!and\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ ) 
+        ###IMPORTANT COMMENT###
+            # This part declare words and symbols that CANNOT appera BEFORE the item. 
+            # include : " in and see to with under regarding by the caption read at following both 
+            # This means the item is not being quoted nor referenced, hence escape from all the quoting rules and refernce sentences.
+            # Explanations on rules:
+              # after ", there is no space, so use (?<!\")
+              # after word, there should be one space, so use (?<!word\ )
+          # Add new rules according to above patterns. Possibly syntax could be simpler but I haven't found the way, so you have to do this tedious work, sorry.
+          # IMPORTANT REMINDER: also update the words in subroutine Item7a and Item89. You should update 4 regex in total (2 in Item89). 
+        ###Continue of Regex###
+    item\s+?7  
+        # item and arbitrary number of spaces.
+    [^Aa]*?    
+        # anything in between except A, so won't match 7A.
+    management.?s?\s+?discussions?\s+?and\s+?analysis\s+?of\s+?
+        # the necessary part
+      (financial\s+?conditions?|results\s+?of\s+?operations?)
+          # "financial conditions" and "results of operations" may come in different order.
+      (\s+?and\s+?results\s+?of\s+?operations?|\s+?and\s+?financial\s+?conditions?)?       
+          # the latter part may not be necessary, so ? mark is used here.
     /
     ######ITEM 7######
     /gixs;
@@ -39,6 +55,7 @@ sub Item7{
 
 sub Item7a{
   $content =~ s/
+    (?<!\")(?<!in\ )(?<!and\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ ) 
     item\s+?7a
     .*?
     quantitative\s+?and\s+?(qualitative|qualification)\s+?disclosures?\s+?about\s+?market\s+?risk
@@ -48,16 +65,16 @@ sub Item7a{
 }
 
 sub Item89{
-  # return true if it's item 8.
   $content =~ s/
+    (?<!\")(?<!in\ )(?<!and\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ ) 
     item\s+?8
     .*?
     financial\s+?statements
     /
     ######ITEM 8######
     /gixs;
-  # while there isn't item 8.
   $content =~ s/
+    (?<!\")(?<!in\ )(?<!and\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ ) 
     item\s+?9a?
     .*
     changes\s+?in\s+?and\s+?
@@ -72,6 +89,7 @@ sub Item89{
 
 # global string to store all the content;
 $contentInOneLine="";
+
 # override the method in HTML::Parser to add the target text into $string.
 sub text{
   my ($self, $text) = @_;
@@ -89,7 +107,6 @@ sub to_utf8 {
 }
 
 my $p = new HTMLStrip;
-# use <> so we can read from command line.
 while(<FILE>){
   $p->parse($_);
 }
@@ -101,6 +118,9 @@ $p->eof;# flush the parser.
 # Here we use the HTML::Entities module.
 $plainTextInOneLine = HTML::Entities::decode($contentInOneLine);
 
+# Substitute all the UTF-8 encoded character into us-ascii character.
+# Not a full list, but should be enough to eliminate all the strange characters and help proceed
+#   the substitution in the regex.
 $plainTextInOneLine =~ s//'/gs;
 $plainTextInOneLine =~ s//"/gs;
 $plainTextInOneLine =~ s//"/gs;
@@ -121,8 +141,6 @@ $content = substr($plainTextInOneLine, $startPos);
 Item7();
 Item7a();
 Item89();
-
-# print $content;
 
 # split lines into array.
 @all = split /\#\#\#\#\#\#/, $content;
