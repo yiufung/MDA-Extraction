@@ -19,10 +19,10 @@ for file in files:
     if "Invalid" in respond:
       fina+=1
       finalist.append(file)
-    if "7 outputted" in respond:
+    if "mda outputted" in respond:
       suc7+=1
       suc7list.append(file)
-    if "7a outputted" in respond:
+    if "quant outputted" in respond:
       suc7a+=1
       suc7alist.append(file)
 
@@ -39,11 +39,21 @@ for x in suc7alist:
   if x in faillist:
     faillist.remove(x)
 
-print "Total file: ", total
-print "Success I7: ", suc7
-print "Success I7A:", suc7a
-print "I7 is fina: ", fina
+print "Total files: ", total
+print "mda: ", suc7
+print "quantitative:", suc7a
+print "financial statements: ", fina
 print "Fail files: ", len(faillist)
+
+# uncomment if you want detailed statistics
+#total_left = len(faillist)+fina+suc7
+#pass=fina+suc7
+#print "\n"
+#print "Fail + I7 financial + I7 Extracted = ", total_left
+#print "Pass files = I7 Extracted + I7 financial = ", pass
+#print "Pass rate = ", float(pass)/float(total_left)
+#print "I7 rate = I7 / Pass files = ", float(suc7)/float(pass)
+#print "I7A rate = I7A / Pass files = ", float(suc7a)/float(pass)
 
 #var=raw_input("Output files to corresponding directory?[Y/N]:")
 #if var == "Y" or var == "y":
