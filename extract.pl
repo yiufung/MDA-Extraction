@@ -1,10 +1,5 @@
 #!/usr/bin/local/perl
 
-# Reminder:
-#   Item 6. Management / latter part
-#   Go all the way to extract. Logic in until
-# Overwrite..= =
-
 # Perl script for extracting MD&A from 10-k forms.
 # by Cheong Yiufung @ HKUST 
 # instructed by Prof. Allen Huang and with help from Xia Jingjing.
@@ -52,9 +47,9 @@ sub MDA{
     .{0,25}
       #anything in between for at most 25 characters. it match item 6, 7 and other situations. 
       #also cause problems of overrunning. 
-    management.?s?\s+?discussions?\s+?and\s+?analysis\s+?
+    management.?s?.?\s+?discussions?\s+?and\s+?analysis\s+?
         # the necessary part
-      (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+operations?)?
+      (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+?operations?)?
           # "financial conditions" and "results of operations" may come in different order.
       (\s+?and\s+?results\s+?of\s+?operations?|\s+?and\s+?financial\s+?conditions?)?
           # the latter part may be unnecessary, so ? mark is used in the last.
@@ -62,34 +57,38 @@ sub MDA{
     ######SPLIT MDA######
     /gixs;
 
-  ## Detect Item 7 Financial statements.
-  if($content =~ m/
-    item\s+?7
-    [^Aa]*?
-    (Consolidated)?\s+?financial\s+?statements?
-    /gixs){
-    print "Invalid Item 7: Financial statements found. \n";
-  }
-
   if($change == 0){
     ## Big chance that MDA is hidden in Item 6. 
     print "Try to find MDA in Item 6. \n";
     TryMDA6();
   }
+
+  if($MDAinItem6 == 0){
+    if($content =~ m/
+      item\s+?7
+      [^Aa]*?
+      (Consolidated)?\s+?financial\s+?statements?
+      /gixs){
+      # Item 7 is Financial statements, however, Item 6 is NOT MDA. 
+      # catch this file by python script to find out more details. 
+      print "Invalid Item 7: Financial statements found. \n";
+    }
+  }
+
 }
 
 # The function try to assert whether MDA is in Item 6. 
 # It only gets called when MDA is NOT in Item 7. 
 # May assert the global variable $MDAinItem6
 sub TryMDA6{
-  ## Similar regex to the Item 7 one. 
+  # Item 6 is MDA. 
   $change = $content =~ s/
       (?<!\")(?<!\,\ )(?<!in\ )(?<!and\ )(?<!or\ )(?<!not\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ )(?<!also\ )(?<!of\ )(?<!within\ )
   item\s+?6
   [^Aa]*?
   .{0,25}
-  management.?s?\s+?discussions?\s+?and\s+?analysis\s+?
-    (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+operations?)?
+  management.?s?.?\s+?discussions?\s+?and\s+?analysis\s+?
+    (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+?operations?)?
     (\s+?and\s+?results\s+?of\s+?operations?|\s+?and\s+?financial\s+?conditions?)?
   /
   ######SPLIT MDA######
@@ -98,6 +97,22 @@ sub TryMDA6{
   if ($change != 0){ # MDA is in Item 6. 
     $MDAinItem6=1;
   }
+
+  # Item 6 is Plan of operations. considered as MDA. 
+  $change = $content =~ s/
+      (?<!\")(?<!\,\ )(?<!in\ )(?<!and\ )(?<!or\ )(?<!not\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ )(?<!also\ )(?<!of\ )(?<!within\ )
+  item\s+?6
+  [^Aa]*?
+  .{0,25}
+  (management.?s?.?\s+?)?plans?\s+?of\s+?operations?\s+?
+  /
+  ######SPLIT MDA######
+  /gixs;
+
+  if ($change != 0){ # MDA is in Item 6. 
+    $MDAinItem6=1;
+  }
+
 }
 
 sub Quantitative{
