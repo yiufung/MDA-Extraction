@@ -1,9 +1,9 @@
 #!/usr/bin/local/perl
 
 # Reminder:
-#   rename mda to avoid confusion also quant (py and funcions, FILEHANDLE in pl)
 #   Item 6. Management / latter part
 #   Go all the way to extract. Logic in until
+# Overwrite..= =
 
 # Perl script for extracting MD&A from 10-k forms.
 # by Cheong Yiufung @ HKUST 
@@ -12,7 +12,7 @@
 
 # Usage:
 # perl extract.pl <filename>
-# The script will then generate <filename>_7 and <filename>_7a if the corresponding item is extracted.
+# The script will then generate <filename>_mda and <filename>_quant if the corresponding item is extracted.
 # Whether it successfully extracts or not, it will generate <filename>_plaintext, which contains the plain text after decoding from HTML.
 # You can feed <filename>_out to extract_MDA.pl to check the difference.
 # Use rm *_7 *_7a *_out to remove generated files.
@@ -42,22 +42,25 @@ sub MDA{
               # after ", there is no space, so use (?<!\")
               # after word, there should be one space, so use (?<!word\ )
           # Add new rules according to above patterns. Possibly syntax could be simpler but I haven't found the way, so you have to do this tedious work, sorry.
-          # IMPORTANT REMINDER: also update the words in subroutine Item7a and Item89. You should update 4 regex in total (2 in Item89). 
+          # IMPORTANT REMINDER: also update the words in subroutine Quantitative and Item89. You should update 4 regex in total (2 in Item89). 
         ###Continue of Regex###
     item\s+?7
-        # item and arbitrary number of spaces.
+      # item and arbitrary number of spaces.
     [^Aa]*?
-        # anything in between except A, so won't match 7A.
-    management.?s?\s+?discussions?\s+?and\s+?analysis\s+?of\s+?
+      # anything in between except A, so won't match 7A.
+    .{0,25}
+      #anything in between for at most 25 characters. it match item 6, 7 and other situations. 
+      #also cause problems of overrunning. 
+    management.?s?\s+?discussions?\s+?and\s+?analysis\s+?
         # the necessary part
-        # need 
-      (financial\s+?conditions?|results\s+?of\s+?operations)
+      (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+operations?)
           # "financial conditions" and "results of operations" may come in different order.
       (\s+?and\s+?results\s+?of\s+?operations?|\s+?and\s+?financial\s+?conditions?)?
           # the latter part may be unnecessary, so ? mark is used in the last.
     /
-    ######ITEM 7######
+    ######SPLIT MDA######
     /gixs;
+
     if($content =~ m/
       item\s+?7
       [^Aa]*?
@@ -75,7 +78,7 @@ sub Quantitative{
     .*?
     (quantitative|qualitative)\s+?and\s+?(quantitative|qualitative|qualification)\s+?disclosures?\s+?about\s+?market\s+?risk
     /
-    ######ITEM 7a######
+    ######SPLIT QUANT######
     /gixs;
 }
 
@@ -86,7 +89,7 @@ sub Item89{
     .*?
     financial\s+?statements
     /
-    ######ITEM 8######
+    ######SPLIT REST8######
     /gixs;
   $content =~ s/
     (?<!\")(?<!\,\ )(?<!in\ )(?<!and\ )(?<!or\ )(?<!not\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ )(?<!also\ )(?<!of\ )(?<!within\ )
@@ -94,9 +97,14 @@ sub Item89{
     .*
     changes\s+?in\s+?and\s+?
     /
-    ######ITEM 9######
+    ######SPLIT REST9######
     /gixs;
 }
+
+#Debug mode. 
+$debug=1;
+
+if($debug == 1){ print "before extract.\n";}
 
 # global string to store all the content;
 $contentInOneLine="";
@@ -121,6 +129,8 @@ while(<FILE>){
 }
 $p->eof;# flush the parser.
 close FILE;
+
+if($debug==1){ print "file read.\n";}
 
 # By so far we get the whole text in one line.
 # Before extracting, substitute all HTML entity code into ASCII character.
@@ -147,48 +157,75 @@ $startPos = length($plainTextInOneLine) * 0.05;
 
 $content = substr($plainTextInOneLine, $startPos);
 
+if($debug==1){ print "before matching. \n";}
+
 # Matching and substitution.
+if($debug==1){ print "MDA starts matching. \n";}
 MDA();
+if($debug==1){ print "MDA fin matching. \n";}
+
+if($debug==1){ print "QUANT starts matching. \n";}
 Quantitative();
+if($debug==1){ print "QUANT fin matching. \n";}
+
+if($debug==1){ print "REST starts matching. \n";}
 Item89();
+if($debug==1){ print "REST fin matching. \n";}
+
 
 # split lines into array.
 @all = split /\#\#\#\#\#\#/, $content;
 # prepare empty strings for output.
-$output7="";
-$output7a="";
-$exist7=0;
-$exist7a=0;
+$outputMDA="";
+$outputQuant="";
+$existMDA=0;
+$existQuant=0;
+
+if($debug==1){ print "before extracting.\n";}
 
 # now it's in such a pattern.
-#  sth######ITEM7######Content of Item 7######ITEM7a######Content of Item7a
+#  sth######MDA######Content of MDA######QUANT######Content of QUANT
 for($i = 0; $i < scalar(@all); ++$i){
-  if($all[$i] =~ m/^ITEM (7|7a|8|9)$/s){
+  if($all[$i] =~ m/^SPLIT (MDA|QUANT|REST8|REST9)$/s){
+
+    if($debug==1){ print "inside extraction.\n";}
+
     # now $all[$i+1] should store the string I want.
-    if($all[$i] =~ m/^ITEM 7$/s){
-      $exist7=1;
+    if($all[$i] =~ m/^SPLIT MDA$/s){
+
+      if($debug==1){ print "inside MDA.\n";}
+
+      $existMDA=1;
       # a do-until block is used here to add consecutive segments together.
-      # In some cases, there might be multiple ITEM7(Continue) in the file which will mess up the file. The loop will add them all together.
+      # In some cases, there might be multiple MDA(Continue) in the file which will mess up the file. The loop will add them all together.
       do{
-        $output7.=$all[++$i];
-      } until($all[$i+1] =~ m/^ITEM 7a$/s
-            or $all[$i+1] =~ m/^ITEM 8$/s
-            or $all[$i+1] =~ m/^ITEM 9$/s);
+        if($debug==1){ print "adding MDA.\n";}
+        $outputMDA.=$all[++$i];
+      } until($all[$i+1] =~ m/^SPLIT QUANT$/s
+            or $all[$i+1] =~ m/^SPLIT REST8$/s
+            or $all[$i+1] =~ m/^SPLIT REST9$/s
+            or $i==scalar(@all));
     }
-    elsif($all[$i] =~ m/^ITEM 7a$/s){
-      $exist7a=1;
+    elsif($all[$i] =~ m/^SPLIT QUANT$/s){
+      
+      if($debug==1){ print "inside QUANT.\n";}
+
+      $existQuant=1;
       do{
-        $output7a.=$all[++$i];
-      } until($all[$i+1] =~ m/^ITEM 8$/s
-            or $all[$i+1] =~ m/^ITEM 9$/s);
+        $outputQuant.=$all[++$i];
+      } until($all[$i+1] =~ m/^SPLIT REST8$/s
+            or $all[$i+1] =~ m/^SPLIT REST9$/s
+            or $i==scalar(@all));
     }
   }
 }
 
+if($debug==1){ print "after extracting.\n";}
+
 # Output to 3 individual files.
 $fileout=$filename."_plaintext";
-$item7file=$filename."_mda";
-$item7afile=$filename."_quant";
+$mdaFile=$filename."_mda";
+$quantFile=$filename."_quant";
 
 # out
 open (FILEOUT, "> $fileout");
@@ -196,24 +233,24 @@ print FILEOUT $plainTextInOneLine;
 close FILEOUT;
 
 # 7
-if($exist7){
-  open (ITEM7, "> $item7file");
-  print ITEM7 "MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS\n\n";
-  print ITEM7 $output7;
-  close ITEM7;
-  print "$item7file outputted.\n";
+if($existMDA){
+  open (MDAFILE, "> $mdaFile");
+  print MDAFILE "MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS\n\n";
+  print MDAFILE $outputMDA;
+  close MDAFILE;
+  print "$mdaFile outputted.\n";
 }
 else{
   print "MDA in $filename not found!\n";
 }
 
 # 7a
-if($exist7a){
-  open (ITEM7A, "> $item7afile");
-  print ITEM7A "QUANTITATIVE AND QUALITATIVE DISCLOSURES ABOUT MARKET RISK\n\n";
-  print ITEM7A $output7a;
-  close ITEM7A;
-  print "$item7afile outputted.\n";
+if($existQuant){
+  open (QUANTFILE, "> $quantFile");
+  print QUANTFILE "QUANTITATIVE AND QUALITATIVE DISCLOSURES ABOUT MARKET RISK\n\n";
+  print QUANTFILE $outputQuant;
+  close QUANTFILE;
+  print "$quantFile outputted.\n";
 }
 else{
   print "Quantitative in $filename not found.\n";
