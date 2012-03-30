@@ -32,7 +32,8 @@ use utf8;
 # g for global matching.
 # Note: ? added after + or * (such as .*? \s+?) are for non-greedy pattern matching.
 sub MDA{
-  $content =~ s/
+  # $change to record how many substitution has taken place. 
+  $change = $content =~ s/
     (?<!\")(?<!\,\ )(?<!in\ )(?<!and\ )(?<!or\ )(?<!not\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ )(?<!also\ )(?<!of\ )(?<!within\ )
         ###IMPORTANT COMMENT###
             # This part declare words and symbols that CANNOT appear BEFORE the item. 
@@ -42,7 +43,7 @@ sub MDA{
               # after ", there is no space, so use (?<!\")
               # after word, there should be one space, so use (?<!word\ )
           # Add new rules according to above patterns. Possibly syntax could be simpler but I haven't found the way, so you have to do this tedious work, sorry.
-          # IMPORTANT REMINDER: also update the words in subroutine Quantitative and Item89. You should update 4 regex in total (2 in Item89). 
+          # IMPORTANT REMINDER: also update the words in subroutine Quantitative and setStopSign. You should update 4 regex in total (2 in setStopSign). 
         ###Continue of Regex###
     item\s+?7
       # item and arbitrary number of spaces.
@@ -53,7 +54,7 @@ sub MDA{
       #also cause problems of overrunning. 
     management.?s?\s+?discussions?\s+?and\s+?analysis\s+?
         # the necessary part
-      (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+operations?)
+      (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+operations?)?
           # "financial conditions" and "results of operations" may come in different order.
       (\s+?and\s+?results\s+?of\s+?operations?|\s+?and\s+?financial\s+?conditions?)?
           # the latter part may be unnecessary, so ? mark is used in the last.
@@ -61,14 +62,42 @@ sub MDA{
     ######SPLIT MDA######
     /gixs;
 
-    if($content =~ m/
-      item\s+?7
-      [^Aa]*?
-      financial\s+?statements?
-      /gixs
-    ){
-      print "Invalid Item 7: Financial statements found. \n";
-    }
+  ## Detect Item 7 Financial statements.
+  if($content =~ m/
+    item\s+?7
+    [^Aa]*?
+    (Consolidated)?\s+?financial\s+?statements?
+    /gixs){
+    print "Invalid Item 7: Financial statements found. \n";
+  }
+
+  if($change == 0){
+    ## Big chance that MDA is hidden in Item 6. 
+    print "Try to find MDA in Item 6. \n";
+    TryMDA6();
+  }
+}
+
+# The function try to assert whether MDA is in Item 6. 
+# It only gets called when MDA is NOT in Item 7. 
+# May assert the global variable $MDAinItem6
+sub TryMDA6{
+  ## Similar regex to the Item 7 one. 
+  $change = $content =~ s/
+      (?<!\")(?<!\,\ )(?<!in\ )(?<!and\ )(?<!or\ )(?<!not\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ )(?<!also\ )(?<!of\ )(?<!within\ )
+  item\s+?6
+  [^Aa]*?
+  .{0,25}
+  management.?s?\s+?discussions?\s+?and\s+?analysis\s+?
+    (of\s+?financial\s+?conditions?|of\s+?results\s+?of\s+?operations?|or\s+?plans?\s+?of\s+operations?)?
+    (\s+?and\s+?results\s+?of\s+?operations?|\s+?and\s+?financial\s+?conditions?)?
+  /
+  ######SPLIT MDA######
+  /gixs;
+
+  if ($change != 0){ # MDA is in Item 6. 
+    $MDAinItem6=1;
+  }
 }
 
 sub Quantitative{
@@ -82,27 +111,47 @@ sub Quantitative{
     /gixs;
 }
 
-sub Item89{
+sub setStopSign{
   $content =~ s/
     (?<!\")(?<!\,\ )(?<!in\ )(?<!and\ )(?<!or\ )(?<!not\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ )(?<!also\ )(?<!of\ )(?<!within\ )
     item\s+?8
     .*?
     financial\s+?statements
     /
-    ######SPLIT REST8######
+    ######SPLIT STOPSIGN######
     /gixs;
+
   $content =~ s/
     (?<!\")(?<!\,\ )(?<!in\ )(?<!and\ )(?<!or\ )(?<!not\ )(?<!see\ )(?<!to\ )(?<!with\ )(?<!under\ )(?<!regarding\ )(?<!by\ )(?<!the\ )(?<!caption\ )(?<!read\ )(?<!at\ )(?<!following\ )(?<!both\ )(?<!also\ )(?<!of\ )(?<!within\ )
     item\s+?9a?
     .*
     changes\s+?in\s+?and\s+?
     /
-    ######SPLIT REST9######
+    ######SPLIT STOPSIGN######
     /gixs;
+  
+  # SPECIAL:
+  # When MDAinItem6 = 1, probably Item 7 Financial Statements is a stop sign. 
+  # Set here. 
+  if($MDAinItem6){
+    $content =~ s/
+      item\s+?7
+      [^Aa]*?
+      (Consolidated)?\s+?financial\s+?statements?
+      /
+      ######SPLIT STOPSIGN######
+      /gixs;
+  }
 }
 
 #Debug mode. 
 $debug=1;
+
+# Item 6 as MDA mode. asserted in MDA().
+# In such situation, it's probable that Item 7 is financial statements.
+# need to reset the stop sign under such situation
+# Function influenced include: setStopSign() (set Item 7 financial statements as stop sign. )
+$MDAinItem6=0;
 
 if($debug == 1){ print "before extract.\n";}
 
@@ -168,9 +217,9 @@ if($debug==1){ print "QUANT starts matching. \n";}
 Quantitative();
 if($debug==1){ print "QUANT fin matching. \n";}
 
-if($debug==1){ print "REST starts matching. \n";}
-Item89();
-if($debug==1){ print "REST fin matching. \n";}
+if($debug==1){ print "STOPSIGN starts matching. \n";}
+setStopSign();
+if($debug==1){ print "STOPSIGN fin matching. \n";}
 
 
 # split lines into array.
@@ -186,7 +235,7 @@ if($debug==1){ print "before extracting.\n";}
 # now it's in such a pattern.
 #  sth######MDA######Content of MDA######QUANT######Content of QUANT
 for($i = 0; $i < scalar(@all); ++$i){
-  if($all[$i] =~ m/^SPLIT (MDA|QUANT|REST8|REST9)$/s){
+  if($all[$i] =~ m/^SPLIT (MDA|QUANT|STOPSIGN)$/s){
 
     if($debug==1){ print "inside extraction.\n";}
 
@@ -202,8 +251,7 @@ for($i = 0; $i < scalar(@all); ++$i){
         if($debug==1){ print "adding MDA.\n";}
         $outputMDA.=$all[++$i];
       } until($all[$i+1] =~ m/^SPLIT QUANT$/s
-            or $all[$i+1] =~ m/^SPLIT REST8$/s
-            or $all[$i+1] =~ m/^SPLIT REST9$/s
+            or $all[$i+1] =~ m/^SPLIT STOPSIGN$/s
             or $i==scalar(@all));
     }
     elsif($all[$i] =~ m/^SPLIT QUANT$/s){
@@ -213,8 +261,7 @@ for($i = 0; $i < scalar(@all); ++$i){
       $existQuant=1;
       do{
         $outputQuant.=$all[++$i];
-      } until($all[$i+1] =~ m/^SPLIT REST8$/s
-            or $all[$i+1] =~ m/^SPLIT REST9$/s
+      } until($all[$i+1] =~ m/^SPLIT STOPSIGN$/s
             or $i==scalar(@all));
     }
   }

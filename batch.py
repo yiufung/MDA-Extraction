@@ -25,7 +25,7 @@ for file in files:
     print "progress... ", float(total)/float(approx_total)*100, " %"
 
     respond=commands.getoutput("perl extract.pl "+file)
-    if "Financial statements" in respond:
+    if "Item 7: Financial statements" in respond:
       fina+=1
       finalist.append(file)
     if "mda outputted" in respond:
